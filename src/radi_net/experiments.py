@@ -45,9 +45,12 @@ def _record(rows, exp, n, m, matrix_type, rhs_mode, rank_B, K, method, gamma, se
     )
 
 
-def run_diagonal_experiment(out_csv, large=False, seed=0):
-    n_list = [256, 512, 1024, 2048] if large else [128, 256]
-    K_list = [5, 10, 20] if large else [5, 10]
+def run_diagonal_experiment(out_csv, large=False, seed=0, n_list=None, K_list=None):
+    if n_list is None:
+        n_list = [256, 512, 1024, 2048] if large else [128, 256]
+    if K_list is None:
+        K_list = [5, 10, 20] if large else [5, 10]
+
     rows = []
     for n in n_list:
         lambdas = np.logspace(-2, 2, n)
@@ -65,28 +68,14 @@ def run_diagonal_experiment(out_csv, large=False, seed=0):
                 }
                 for name, shifts in methods.items():
                     out = lr_adi_spd(S, B, shifts)
-                    _record(
-                        rows,
-                        "diagonal",
-                        n,
-                        np.nan,
-                        "diagonal",
-                        rhs_mode,
-                        B.shape[1],
-                        K,
-                        name,
-                        0.0,
-                        seed,
-                        out,
-                        shifts,
-                        obj=weighted_rational_loss(spec_lam, spec_w, shifts),
-                        success=out["success"],
-                    )
+                    _record(rows, "diagonal", n, np.nan, "diagonal", rhs_mode, B.shape[1], K, name, 0.0, seed, out, shifts,
+                            obj=weighted_rational_loss(spec_lam, spec_w, shifts), success=out["success"])
                 for gamma in [0.0, 1e-2]:
                     net = RADINet(K)
                     fit = net.fit_spectral(spec_lam, spec_w, gamma=gamma, seed=seed)
                     out = net.forward(S, B)
-                    _record(rows, "diagonal", n, np.nan, "diagonal", rhs_mode, B.shape[1], K, "RADI-Net-spectral", gamma, seed, out, net.alphas(), fit["objective"], fit["success"])
+                    _record(rows, "diagonal", n, np.nan, "diagonal", rhs_mode, B.shape[1], K,
+                            "RADI-Net-spectral", gamma, seed, out, net.alphas(), fit["objective"], fit["success"])
     pd.DataFrame(rows).to_csv(out_csv, index=False)
 
 
@@ -106,7 +95,9 @@ def run_laplacian_experiment(out_csv, large=False, seed=0):
             spec_lam, spec_w = spectral_data_laplacian_2d(m, B)
             for K in K_list:
                 shifts = shifts_logspace(lmin, lmax, K)
-                _record(rows, "laplacian", m * m, m, "laplacian2d", rhs_mode, B.shape[1], K, "LR-ADI-logspace", 0.0, seed, lr_adi_spd(S, B, shifts), shifts)
+                _record(rows, "laplacian", m * m, m, "laplacian2d", rhs_mode, B.shape[1], K,
+                        "LR-ADI-logspace", 0.0, seed, lr_adi_spd(S, B, shifts), shifts,
+                        obj=weighted_rational_loss(spec_lam, spec_w, shifts))
     pd.DataFrame(rows).to_csv(out_csv, index=False)
 
 
