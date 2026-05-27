@@ -20,10 +20,29 @@ def _steps(hist, thr):
 
 def _record(rows, exp, n, m, matrix_type, rhs_mode, rank_B, K, method, gamma, seed, out, shifts, obj=np.nan, success=True):
     h = out.get("relres_history", [])
-    rows.append(dict(experiment=exp, n=n, m=m, matrix_type=matrix_type, rhs_mode=rhs_mode, rank_B=rank_B, K=K, method=method, gamma=gamma, seed=seed,
-                     final_relres=h[-1] if h else np.nan, steps_to_1e-4=_steps(h,1e-4), steps_to_1e-6=_steps(h,1e-6), steps_to_1e-8=_steps(h,1e-8),
-                     time_seconds=out.get("time_seconds", np.nan), shifts_json=json.dumps(list(map(float, shifts))), relres_history_json=json.dumps(list(map(float,h))),
-                     objective_value=float(obj), success=bool(success)))
+    rows.append(
+        {
+            "experiment": exp,
+            "n": n,
+            "m": m,
+            "matrix_type": matrix_type,
+            "rhs_mode": rhs_mode,
+            "rank_B": rank_B,
+            "K": K,
+            "method": method,
+            "gamma": gamma,
+            "seed": seed,
+            "final_relres": h[-1] if h else np.nan,
+            "steps_to_1e-4": _steps(h, 1e-4),
+            "steps_to_1e-6": _steps(h, 1e-6),
+            "steps_to_1e-8": _steps(h, 1e-8),
+            "time_seconds": out.get("time_seconds", np.nan),
+            "shifts_json": json.dumps(list(map(float, shifts))),
+            "relres_history_json": json.dumps(list(map(float, h))),
+            "objective_value": float(obj),
+            "success": bool(success),
+        }
+    )
 
 
 def run_diagonal_experiment(out_csv, large=False, seed=0):
@@ -46,8 +65,23 @@ def run_diagonal_experiment(out_csv, large=False, seed=0):
                 }
                 for name, shifts in methods.items():
                     out = lr_adi_spd(S, B, shifts)
-                    _record(rows, "diagonal", n, np.nan, "diagonal", rhs_mode, B.shape[1], K, name, 0.0, seed, out, shifts,
-                            obj=weighted_rational_loss(spec_lam, spec_w, shifts), success=out["success"])
+                    _record(
+                        rows,
+                        "diagonal",
+                        n,
+                        np.nan,
+                        "diagonal",
+                        rhs_mode,
+                        B.shape[1],
+                        K,
+                        name,
+                        0.0,
+                        seed,
+                        out,
+                        shifts,
+                        obj=weighted_rational_loss(spec_lam, spec_w, shifts),
+                        success=out["success"],
+                    )
                 for gamma in [0.0, 1e-2]:
                     net = RADINet(K)
                     fit = net.fit_spectral(spec_lam, spec_w, gamma=gamma, seed=seed)
@@ -64,7 +98,7 @@ def run_laplacian_experiment(out_csv, large=False, seed=0):
         S = make_2d_dirichlet_laplacian(m)
         lmin, lmax = estimate_spectral_interval(S)
         rhs_modes = {
-            "localized_center": rhs_localized_2d(m, [(m//2, m//2), (m//2+1, m//2)]),
+            "localized_center": rhs_localized_2d(m, [(m // 2, m // 2), (m // 2 + 1, m // 2)]),
             "low_frequency": rhs_low_frequency_2d(m, 2),
             "high_frequency": rhs_high_frequency_2d(m, 2),
         }
@@ -72,7 +106,7 @@ def run_laplacian_experiment(out_csv, large=False, seed=0):
             spec_lam, spec_w = spectral_data_laplacian_2d(m, B)
             for K in K_list:
                 shifts = shifts_logspace(lmin, lmax, K)
-                _record(rows,"laplacian",m*m,m,"laplacian2d",rhs_mode,B.shape[1],K,"LR-ADI-logspace",0.0,seed,lr_adi_spd(S,B,shifts),shifts)
+                _record(rows, "laplacian", m * m, m, "laplacian2d", rhs_mode, B.shape[1], K, "LR-ADI-logspace", 0.0, seed, lr_adi_spd(S, B, shifts), shifts)
     pd.DataFrame(rows).to_csv(out_csv, index=False)
 
 
@@ -83,12 +117,17 @@ def run_direct_training_sanity(out_csv, seed=0):
     B = rhs_diagonal_weighted(n, "bimodal", r=2, seed=seed)
     spec_lam, spec_w = spectral_data_diagonal(lambdas, B)
     rows = []
-    net_s = RADINet(K); fit_s = net_s.fit_spectral(spec_lam, spec_w, seed=seed); out_s = net_s.forward(S, B)
-    _record(rows,"direct_sanity",n,np.nan,"diagonal","bimodal",2,K,"RADI-Net-spectral",0.0,seed,out_s,net_s.alphas(),fit_s["objective"],fit_s["success"])
-    net_d = RADINet(K); fit_d = net_d.fit_direct(S, B, lambdas.min(), lambdas.max()); out_d = net_d.forward(S, B)
-    _record(rows,"direct_sanity",n,np.nan,"diagonal","bimodal",2,K,"RADI-Net-direct",0.0,seed,out_d,net_d.alphas(),fit_d["objective"],fit_d["success"])
-    shifts = shifts_logspace(lambdas.min(), lambdas.max(), K); out = lr_adi_spd(S, B, shifts)
-    _record(rows,"direct_sanity",n,np.nan,"diagonal","bimodal",2,K,"LR-ADI-logspace",0.0,seed,out,shifts)
+    net_s = RADINet(K)
+    fit_s = net_s.fit_spectral(spec_lam, spec_w, seed=seed)
+    out_s = net_s.forward(S, B)
+    _record(rows, "direct_sanity", n, np.nan, "diagonal", "bimodal", 2, K, "RADI-Net-spectral", 0.0, seed, out_s, net_s.alphas(), fit_s["objective"], fit_s["success"])
+    net_d = RADINet(K)
+    fit_d = net_d.fit_direct(S, B, lambdas.min(), lambdas.max())
+    out_d = net_d.forward(S, B)
+    _record(rows, "direct_sanity", n, np.nan, "diagonal", "bimodal", 2, K, "RADI-Net-direct", 0.0, seed, out_d, net_d.alphas(), fit_d["objective"], fit_d["success"])
+    shifts = shifts_logspace(lambdas.min(), lambdas.max(), K)
+    out = lr_adi_spd(S, B, shifts)
+    _record(rows, "direct_sanity", n, np.nan, "diagonal", "bimodal", 2, K, "LR-ADI-logspace", 0.0, seed, out, shifts)
     pd.DataFrame(rows).to_csv(out_csv, index=False)
 
 
@@ -101,8 +140,10 @@ def run_storyline_demo(out_csv, small=True, seed=0):
     for mode in ["low", "high", "bimodal"]:
         B = rhs_diagonal_weighted(n, mode, 3, seed)
         out0 = lr_adi_spd(S, B, log_shifts)
-        _record(rows,"storyline",n,np.nan,"diagonal",mode,3,K,"LR-ADI-logspace",0.0,seed,out0,log_shifts)
-        lam,w = spectral_data_diagonal(lambdas,B)
-        net = RADINet(K); fit = net.fit_spectral(lam,w,seed=seed); out1 = net.forward(S,B)
-        _record(rows,"storyline",n,np.nan,"diagonal",mode,3,K,"RADI-Net-spectral",0.0,seed,out1,net.alphas(),fit["objective"],fit["success"])
+        _record(rows, "storyline", n, np.nan, "diagonal", mode, 3, K, "LR-ADI-logspace", 0.0, seed, out0, log_shifts)
+        lam, w = spectral_data_diagonal(lambdas, B)
+        net = RADINet(K)
+        fit = net.fit_spectral(lam, w, seed=seed)
+        out1 = net.forward(S, B)
+        _record(rows, "storyline", n, np.nan, "diagonal", mode, 3, K, "RADI-Net-spectral", 0.0, seed, out1, net.alphas(), fit["objective"], fit["success"])
     pd.DataFrame(rows).to_csv(out_csv, index=False)
